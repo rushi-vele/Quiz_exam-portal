@@ -72,6 +72,7 @@ const initializeSchema = async () => {
             time_taken INTEGER,
             percentage REAL,
             achieved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, exam_id),
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (exam_id) REFERENCES exams(id)
         );

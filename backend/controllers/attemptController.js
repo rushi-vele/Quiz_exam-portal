@@ -215,9 +215,15 @@ exports.submitExam = async (req, res) => {
             args: [finalScore, percentage, attemptIdNum] 
         });
 
-        // Add to leaderboard (using upsert logic or just insert)
+        // Add or Update leaderboard (using upsert logic)
         await client.execute({
-            sql: 'INSERT INTO leaderboard (user_id, exam_id, total_score, percentage, time_taken) VALUES (?, ?, ?, ?, ?)',
+            sql: `INSERT INTO leaderboard (user_id, exam_id, total_score, percentage, time_taken, achieved_at) 
+                  VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                  ON CONFLICT(user_id, exam_id) 
+                  DO UPDATE SET total_score = EXCLUDED.total_score,
+                                percentage = EXCLUDED.percentage,
+                                time_taken = EXCLUDED.time_taken,
+                                achieved_at = CURRENT_TIMESTAMP`,
             args: [req.user.id, attempt.exam_id, finalScore, percentage, timeTaken]
         });
 
