@@ -6,7 +6,6 @@ import {
     Users, 
     BarChart3, 
     Trophy, 
-    Settings, 
     LogOut,
     GraduationCap,
     RotateCcw
@@ -39,13 +38,11 @@ const Sidebar = () => {
         { to: '/admin/results', icon: BarChart3, label: 'Results' },
         { to: '/admin/retakes', icon: RotateCcw, label: 'Retakes' },
         { to: '/admin/leaderboard', icon: Trophy, label: 'Leaderboard' },
-        { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ] : [
         { to: '/student', icon: LayoutDashboard, label: 'Dashboard' },
         { to: '/student/exams', icon: BookOpen, label: 'All Exams' },
         { to: '/student/results', icon: BarChart3, label: 'History' },
         { to: '/student/leaderboard', icon: Trophy, label: 'Leaderboard' },
-        { to: '/student/settings', icon: Settings, label: 'Settings' },
     ];
 
     return (
