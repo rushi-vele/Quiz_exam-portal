@@ -14,8 +14,10 @@ import { Card, Button } from '../../components/common';
 import API from '../../api/api';
 import { cn } from '../../utils/cn';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
 
 const Leaderboard = () => {
+    const { user } = useAuth();
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [exams, setExams] = useState([]);
     const [selectedExamId, setSelectedExamId] = useState('global');
@@ -44,7 +46,7 @@ const Leaderboard = () => {
         setIsLoading(true);
         setSelectedExamId(examId);
         try {
-            const url = examId === 'global' ? '/leaderboard/global' : `/leaderboard/exam/${examId}`;
+            const url = examId === 'global' ? '/leaderboard/global' : `/leaderboard/${examId}`;
             const res = await API.get(url);
             setLeaderboardData(res.data);
         } catch (err) {
@@ -62,7 +64,12 @@ const Leaderboard = () => {
     const topThree = filteredData.slice(0, 3);
     const rest = filteredData.slice(3);
 
-    if (isLoading) return <div className="p-20 text-center font-black uppercase text-slate-400 tracking-widest">Calculating Rankings...</div>;
+    if (isLoading) return (
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
+            <div className="w-12 h-12 border-4 border-primary-100 border-t-primary-600 rounded-full animate-spin"></div>
+            <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Calculating Standings...</p>
+        </div>
+    );
 
     return (
         <div className="space-y-12 pb-20">
@@ -164,15 +171,31 @@ const Leaderboard = () => {
 
                 <div className="space-y-4">
                     {rest.length > 0 ? rest.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between p-5 rounded-3xl border-2 border-slate-50 hover:border-primary-100 hover:bg-slate-50/30 transition-all group flex-wrap sm:flex-nowrap gap-4">
+                        <div 
+                            key={index} 
+                            className={cn(
+                                "flex items-center justify-between p-5 rounded-3xl border-2 transition-all hover:bg-slate-50/30 group flex-wrap sm:flex-nowrap gap-4",
+                                item.user_id === user?.id ? "border-primary-500 bg-primary-50/10 shadow-lg shadow-primary-500/5" : "border-slate-50 hover:border-primary-100"
+                            )}>
                             <div className="flex items-center gap-6">
-                                <span className="w-10 text-xl font-black text-slate-300 group-hover:text-primary-600 transition-colors">#{index + 4}</span>
+                                <span className={cn(
+                                    "w-10 text-xl font-black transition-colors",
+                                    item.user_id === user?.id ? "text-primary-600" : "text-slate-300 group-hover:text-primary-600"
+                                )}>#{index + 4}</span>
                                 <div className="flex items-center gap-4">
-                                    <div className="w-11 h-11 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center font-black text-slate-900 text-xs shadow-sm">
+                                    <div className={cn(
+                                        "w-11 h-11 rounded-2xl flex items-center justify-center font-black text-xs shadow-sm border-2",
+                                        item.user_id === user?.id ? "bg-primary-600 text-white border-primary-400" : "bg-white text-slate-900 border-slate-100"
+                                    )}>
                                         {item.name.charAt(0)}
                                     </div>
                                     <div>
-                                        <h5 className="text-base font-black text-slate-900 leading-tight">{item.name}</h5>
+                                        <h5 className="text-base font-black text-slate-900 leading-tight flex items-center gap-3">
+                                            {item.name}
+                                            {item.user_id === user?.id && (
+                                                <span className="bg-primary-600 px-2 py-0.5 rounded-full text-[8px] text-white uppercase tracking-widest">You</span>
+                                            )}
+                                        </h5>
                                         <div className="flex items-center gap-3 mt-1">
                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                                                 <Target size={12} className="text-slate-300" /> {item.exam_title}

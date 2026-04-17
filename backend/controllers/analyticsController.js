@@ -18,15 +18,14 @@ exports.getDashboardStats = async (req, res) => {
             ORDER BY date ASC
         `);
 
-        // Top Performers (Students with highest avg percentage)
+        // Top Performers (Students with highest avg percentage across best attempts)
         const topRes = await client.execute(`
-            SELECT u.name, ROUND(AVG(a.percentage)) as score 
-            FROM attempts a 
-            JOIN users u ON a.user_id = u.id 
-            WHERE a.submitted = 1 
-            GROUP BY a.user_id 
+            SELECT u.name, ROUND(AVG(l.percentage)) as score 
+            FROM leaderboard l
+            JOIN users u ON l.user_id = u.id 
+            GROUP BY l.user_id 
             ORDER BY score DESC 
-            LIMIT 4
+            LIMIT 5
         `);
 
         // Recent Submissions
