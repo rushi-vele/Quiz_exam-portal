@@ -188,28 +188,89 @@ const QuestionCard = ({ question, idx, answer, onAnswerChange, attemptId }) => {
 
                             {/* Evaluation Results Banner */}
                             {submitResult && (
-                                <div className={cn(
-                                    "px-6 py-4 flex items-center justify-between border-b animate-in slide-in-from-top-2 duration-300",
-                                    submitResult.passed ? "bg-emerald-500/10 border-emerald-500/20" : "bg-amber-500/10 border-amber-500/20"
-                                )}>
-                                    <div className="flex items-center gap-4">
-                                        <div className={cn(
-                                            "w-10 h-10 rounded-xl flex items-center justify-center shadow-lg",
-                                            submitResult.passed ? "bg-emerald-500 text-white shadow-emerald-500/20" : "bg-amber-500 text-white shadow-amber-500/20"
-                                        )}>
-                                            {submitResult.passed ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Evaluation Status</p>
-                                            <p className={cn("text-xs font-black uppercase tracking-tight", submitResult.passed ? "text-emerald-400" : "text-amber-400")}>
-                                                {submitResult.passed ? 'ALL TEST CASES PASSED' : 'PARTIAL LOGIC DETECTED'} · {submitResult.passedCount} / {submitResult.totalCount} SECURED
-                                            </p>
+                                <div className="animate-in slide-in-from-top-4 duration-500">
+                                    <div className={cn(
+                                        "px-8 py-6 flex items-center justify-between border-b",
+                                        submitResult.passed ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20"
+                                    )}>
+                                        <div className="flex items-center gap-6">
+                                            <div className={cn(
+                                                "w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl",
+                                                submitResult.passed ? "bg-emerald-500 text-white shadow-emerald-500/40" : "bg-rose-500 text-white shadow-rose-500/40"
+                                            )}>
+                                                {submitResult.passed ? <CheckCircle size={28} /> : <AlertTriangle size={28} />}
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Assessment Pipeline Verdict</p>
+                                                <p className={cn("text-xl font-black uppercase tracking-tight", submitResult.passed ? "text-emerald-600" : "text-rose-600")}>
+                                                    {submitResult.passed ? 'PERFECT EXECUTION' : 'LOGICAL DISCREPANCY DETECTED'}
+                                                </p>
+                                                <p className="text-xs font-bold text-slate-400 mt-1">
+                                                    Logic validated: {submitResult.passedCount} of {submitResult.totalCount} scenarios successful.
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Persistence</p>
-                                        <p className="text-[10px] font-bold text-slate-400">Logic state has been synchronized to cloud hub.</p>
-                                    </div>
+
+                                    {/* Detailed Test Case Results */}
+                                    {submitResult.details && (
+                                        <div className="bg-slate-900 overflow-hidden">
+                                            <div className="grid grid-cols-1 divide-y divide-slate-800">
+                                                {submitResult.details.map((detail, dIdx) => (
+                                                    <div key={dIdx} className="p-6 hover:bg-slate-800/50 transition-colors group">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scenario #{dIdx+1}</span>
+                                                                <span className={cn(
+                                                                    "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+                                                                    detail.passed ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                                                                )}>
+                                                                    {detail.passed ? 'Matched' : 'Mismatch'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-2">
+                                                            <div className="space-y-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-1 h-3 bg-primary-500 rounded-full"></div>
+                                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.1em]">Input (STDIN)</span>
+                                                                </div>
+                                                                <code className="block w-full bg-black/40 p-3 rounded-xl border border-white/5 text-[11px] font-mono text-slate-400 break-all">
+                                                                    {detail.input || '(None Provided)'}
+                                                                </code>
+                                                            </div>
+
+                                                            <div className="space-y-4">
+                                                                <div className="space-y-2">
+                                                                    <span className="text-[9px] font-black text-emerald-500/50 uppercase tracking-widest block ml-1">Expected Signature</span>
+                                                                    <code className="block w-full bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-500/10 text-[11px] font-mono text-emerald-400 break-all">
+                                                                        {detail.expected}
+                                                                    </code>
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    <span className={cn(
+                                                                        "text-[9px] font-black uppercase tracking-widest block ml-1",
+                                                                        detail.passed ? "text-emerald-500/50" : "text-rose-500/50"
+                                                                    )}>
+                                                                        Captured Output
+                                                                    </span>
+                                                                    <code className={cn(
+                                                                        "block w-full p-2.5 rounded-xl border text-[11px] font-mono break-all",
+                                                                        detail.passed 
+                                                                            ? "bg-emerald-950/30 border-emerald-500/10 text-emerald-400" 
+                                                                            : "bg-rose-950/30 border-rose-500/10 text-rose-400"
+                                                                    )}>
+                                                                        {detail.error ? `Error: ${detail.error}` : (detail.actual || '(Empty Buffer)')}
+                                                                    </code>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

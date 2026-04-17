@@ -87,6 +87,7 @@ exports.saveAnswer = async (req, res) => {
 
         let isCorrect = false;
         let marksObtained = 0;
+        let evaluation = null;
 
         if (question.question_type === 'mcq' || question.question_type === 'short_answer') {
             const studentSelection = String(answer).trim().toLowerCase();
@@ -101,44 +102,41 @@ exports.saveAnswer = async (req, res) => {
             }
 
             if (Array.isArray(testCases) && testCases.length > 0) {
-                console.log(`Question ${questionId}: Evaluating ${testCases.length} Test Cases...`);
+                evaluation = { details: [] };
                 let passedCount = 0;
 
                 for (const testCase of testCases) {
                     const result = await internalRunCode(answer, language || 'javascript', testCase.input || '');
                     
-                    const actualOutput = String(result.output || '').trim().toLowerCase();
-                    const expectedOutput = String(testCase.output || '').trim().toLowerCase();
+                    const actualRaw = String(result.output || '').trim();
+                    const expectedRaw = String(testCase.output || '').trim();
+                    
+                    const passed = result.success && actualRaw.toLowerCase() === expectedRaw.toLowerCase();
+                    if (passed) passedCount++;
 
-                    if (result.success && actualOutput === expectedOutput) {
-                        passedCount++;
-                    } else {
-                        console.log(`Test Case Failed. Expected: "${expectedOutput}", Got: "${actualOutput}"`);
-                    }
+                    evaluation.details.push({
+                        input: testCase.input,
+                        expected: expectedRaw,
+                        actual: actualRaw,
+                        passed,
+                        error: result.error
+                    });
                 }
 
-                if (passedCount === testCases.length) {
-                    isCorrect = true;
-                    console.log(`Question ${questionId}: All ${testCases.length} Test Cases Passed! ✅`);
-                } else {
-                    console.log(`Question ${questionId}: Passed ${passedCount}/${testCases.length} Test Cases. ❌`);
-                    // Optional: Partial marks? User didn't specify, so only 100% pass gets points.
-                }
+                evaluation.passed = passedCount === testCases.length;
+                evaluation.passedCount = passedCount;
+                evaluation.totalCount = testCases.length;
+                isCorrect = evaluation.passed;
             } else {
-                // Fallback: Use the previous structural/functional compare logic if no test cases defined
-                console.log(`Question ${questionId}: No test cases found. Falling back to benchmark comparison.`);
-                const cleanedStudent = cleanCode(answer);
-                const cleanedExpectation = cleanCode(question.correct_answer);
-
-                if (cleanedStudent === cleanedExpectation) {
-                    isCorrect = true;
-                } else {
-                    const result = await internalRunCode(answer, language || 'javascript', '');
-                    const benchmark = await internalRunCode(question.correct_answer, language || 'javascript', '');
-                    if (result.success && benchmark.success && result.output === benchmark.output) {
-                        isCorrect = true;
-                    }
-                }
+                // Fallback for logic comparison if no test cases
+                const result = await internalRunCode(answer, language || 'javascript', '');
+                const benchmark = await internalRunCode(question.correct_answer, language || 'javascript', '');
+                
+                const actual = String(result.output || '').trim().toLowerCase();
+                const expected = String(benchmark.output || '').trim().toLowerCase();
+                
+                isCorrect = result.success && benchmark.success && actual === expected;
+                evaluation = { passed: isCorrect, passedCount: isCorrect ? 1 : 0, totalCount: 1 };
             }
         }
 
@@ -155,15 +153,6 @@ exports.saveAnswer = async (req, res) => {
                                 marks_obtained = EXCLUDED.marks_obtained`,
             args: [attemptId, questionId, String(answer), isCorrect, marksObtained]
         });
-
-        let evaluation = null;
-        if (question.question_type === 'coding') {
-            evaluation = {
-                passed: isCorrect,
-                passedCount: typeof passedCount !== 'undefined' ? passedCount : (isCorrect ? 1 : 0),
-                totalCount: Array.isArray(testCases) && testCases.length > 0 ? testCases.length : 1
-            };
-        }
 
         res.json({ 
             success: true, 

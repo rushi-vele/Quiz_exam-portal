@@ -1,99 +1,125 @@
 const { spawn } = require('child_process');
-const vm = require('vm');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-exports.internalRunCode = (code, language, input) => {
+exports.internalRunCode = (code, language, input = '') => {
     return new Promise((resolve) => {
         const startTime = Date.now();
+        const lang = language?.toLowerCase() || 'javascript';
         
-        if (language?.toLowerCase() === 'javascript') {
-            try {
-                let output = '';
-                const context = {
-                    console: {
-                        log: (...args) => { output += args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ') + '\n'; }
-                    },
-                    prompt: () => input || '',
-                    Math, Date, Array, Object, String, Number, Boolean, Map, Set, JSON
-                };
-                const script = new vm.Script(code);
-                script.runInNewContext(context, { timeout: 10000 });
-                resolve({ 
-                    success: true, 
-                    output: output.trim() || 'Execution successful (no output)',
-                    executionTime: Date.now() - startTime
-                });
-            } catch (err) {
-                resolve({ success: false, error: `JS Error: ${err.message}` });
+        // Define runtime settings
+        const config = {
+            javascript: {
+                cmd: ['node', 'node.exe'],
+                ext: 'js',
+                unsafe: ['require(', 'process.', 'child_process', 'fs.', 'eval(', 'Function(']
+            },
+            python: {
+                cmd: ['python', 'python3', 'py'],
+                ext: 'py',
+                unsafe: ['os.', 'sys.', 'subprocess', 'open(', 'eval(', 'exec(', 'socket', 'import os', 'import sys']
             }
-        } else {
-            // Python or default
-            const dangerous = ['os.', 'sys.', 'subprocess', 'open(', 'eval(', 'exec(', 'socket', 'import os', 'import sys'];
-            if (dangerous.some(keyword => code.includes(keyword))) {
-                return resolve({ success: false, error: 'Security Violation: Restricted module usage detected.' });
+        }[lang] || { cmd: ['node'], ext: 'js', unsafe: [] };
+
+        // Security Audit
+        if (config.unsafe.some(keyword => code.includes(keyword))) {
+            return resolve({ success: false, error: `Security Restriction: Usage of forbidden logic detected in ${lang} source.` });
+        }
+
+        const scratchDir = path.join(__dirname, '..', 'scratch');
+        if (!fs.existsSync(scratchDir)) fs.mkdirSync(scratchDir, { recursive: true });
+
+        const fileName = `runner_${crypto.randomUUID()}.${config.ext}`;
+        const filePath = path.join(scratchDir, fileName);
+
+        try {
+            fs.writeFileSync(filePath, code);
+        } catch (err) {
+            return resolve({ success: false, error: 'Runtime Fault: Failed to scaffold execution file.' });
+        }
+
+        let child = null;
+        let stdout = '';
+        let stderr = '';
+        let commandIdx = 0;
+
+        const execute = (cmds) => {
+            const currentCmd = cmds[commandIdx];
+            child = spawn(currentCmd, [filePath]);
+
+            if (input) {
+                const cleanInput = input.endsWith('\n') ? input : input + '\n';
+                child.stdin.write(cleanInput);
+                child.stdin.end();
             }
 
-            const tempFilePath = path.join(__dirname, '..', 'scratch', `temp_${crypto.randomUUID()}.py`);
-            const scratchDir = path.join(__dirname, '..', 'scratch');
-            if (!fs.existsSync(scratchDir)) fs.mkdirSync(scratchDir);
-            
-            try {
-                fs.writeFileSync(tempFilePath, code);
-            } catch (err) {
-                return resolve({ success: false, error: 'FileSystem Error: Scaffold failed.' });
-            }
-
-            const commands = ['python', 'python3', 'py'];
-            let commandIdx = 0;
-
-            const executeWithFallback = (cmd) => {
-                let stdout = '';
-                let stderr = '';
-                const child = spawn(cmd, [tempFilePath]);
-
-                if (input) {
-                    const cleanInput = input.endsWith('\n') ? input : input + '\n';
-                    child.stdin.write(cleanInput);
-                    child.stdin.end();
-                }
-
-                const timeoutId = setTimeout(() => {
+            const timeoutId = setTimeout(() => {
+                if (child) {
                     child.kill();
-                    if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-                    resolve({ success: false, error: 'Execution stopped: Possible infinite loop or missing input' });
-                }, 10000);
+                    cleanup();
+                    resolve({ success: false, error: 'TLE (Time Limit Exceeded): Process terminated after 10s.' });
+                }
+            }, 10000);
 
-                child.stdout.on('data', (d) => stdout += d.toString());
-                child.stderr.on('data', (d) => stderr += d.toString());
+            child.stdout.on('data', (data) => stdout += data.toString());
+            child.stderr.on('data', (data) => stderr += data.toString());
 
-                child.on('close', (exitCode) => {
+            child.on('error', (err) => {
+                if (commandIdx < cmds.length - 1) {
+                    commandIdx++;
                     clearTimeout(timeoutId);
-                    if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+                    return execute(cmds);
+                }
+                clearTimeout(timeoutId);
+                cleanup();
+                resolve({ success: false, error: `Interpreter Error: ${err.message}. Ensure ${lang} is installed.` });
+            });
 
-                    if (exitCode !== 0 && !stdout) {
-                        if (commandIdx < commands.length - 1) {
+            child.on('close', (code) => {
+                clearTimeout(timeoutId);
+                cleanup();
+
+                const finalOutput = stdout.trim();
+                const finalError = stderr.trim();
+
+                if (code !== 0 && !finalOutput) {
+                    // Critical failure (interpreter vs syntax)
+                    if (finalError.toLowerCase().includes('is not recognized') || finalError.toLowerCase().includes('not found')) {
+                        if (commandIdx < cmds.length - 1) {
                             commandIdx++;
-                            return executeWithFallback(commands[commandIdx]);
+                            return execute(cmds);
                         }
-                        return resolve({ success: false, error: stderr.trim() || 'Python Interpreter missing' });
                     }
-                    resolve({ 
-                        success: true, 
-                        output: (stdout.trim() + '\n' + stderr.trim()).trim(),
+                    return resolve({ 
+                        success: false, 
+                        error: finalError || `Runtime Error (Exit Code ${code})`,
                         executionTime: Date.now() - startTime
                     });
+                }
+
+                resolve({
+                    success: true,
+                    output: finalOutput || 'Execution finished (No Output)',
+                    stderr: finalError,
+                    executionTime: Date.now() - startTime
                 });
-            };
-            executeWithFallback(commands[0]);
-        }
+            });
+        };
+
+        const cleanup = () => {
+            try {
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            } catch (e) {}
+        };
+
+        execute(config.cmd);
     });
 };
 
 exports.runCode = async (req, res) => {
     const { code, language, input } = req.body;
-    if (!code) return res.status(400).json({ success: false, error: 'No code provided' });
+    if (!code) return res.status(400).json({ success: false, error: 'Project Source Code Missing' });
 
     const result = await exports.internalRunCode(code, language, input);
     res.json(result);
