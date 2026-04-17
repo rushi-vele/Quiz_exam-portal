@@ -1,6 +1,8 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Bell, User, ChevronDown, LogOut, GraduationCap } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from './NotificationBell';
+import { cn } from '../../utils/cn';
 
 const Navbar = () => {
     const { user, logout } = useAuth();
