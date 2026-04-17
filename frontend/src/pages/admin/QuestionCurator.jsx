@@ -18,6 +18,7 @@ import {
 import { Card, Button } from '../../components/common';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import { API_URL } from '../../context/AuthContext';
 
 const QuestionCurator = () => {
     const { examId } = useParams();
@@ -35,8 +36,8 @@ const QuestionCurator = () => {
         try {
             const token = localStorage.getItem('token');
             const [examRes, qRes] = await Promise.all([
-                axios.get(`https://quiz-exam-portal-4rqm.onrender.com/api/exams/${examId}`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`https://quiz-exam-portal-4rqm.onrender.com/api/questions/${examId}`, { headers: { Authorization: `Bearer ${token}` } })
+                axios.get(`${API_URL}/exams/${examId}`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${API_URL}/questions/${examId}`, { headers: { Authorization: `Bearer ${token}` } })
             ]);
             setExam(examRes.data.exam);
             setQuestions(qRes.data);
@@ -78,7 +79,7 @@ const QuestionCurator = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`http://localhost:5000/api/questions/${id}`, {
+            await axios.delete(`${API_URL}/questions/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             toast.success('Question deleted');
@@ -97,7 +98,7 @@ const QuestionCurator = () => {
 
             // Batch Add new ones
             if (newQs.length > 0) {
-                await axios.post('http://localhost:5000/api/questions/add', {
+                await axios.post(`${API_URL}/questions/add`, {
                     examId,
                     questions: newQs
                 }, { headers: { Authorization: `Bearer ${token}` } });
@@ -105,7 +106,7 @@ const QuestionCurator = () => {
 
             // Update existing ones individually (or implement batch update)
             for (const q of existingQs) {
-                await axios.put(`http://localhost:5000/api/questions/${q.id}`, q, {
+                await axios.put(`${API_URL}/questions/${q.id}`, q, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
             }

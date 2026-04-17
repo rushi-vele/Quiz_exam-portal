@@ -10,6 +10,7 @@ import {
     Award
 } from 'lucide-react';
 import { Button, Card } from '../../components/common';
+import { API_URL } from '../../context/AuthContext';
 import Timer from '../../components/exam/Timer';
 import QuestionPalette from '../../components/exam/QuestionPalette';
 import QuestionCard from '../../components/exam/QuestionCard';
@@ -50,7 +51,7 @@ const ExamPage = () => {
     const fetchExamData = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`https://quiz-exam-portal-4rqm.onrender.com/api/exams/${id}`, {
+            const res = await axios.get(`${API_URL}/exams/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setExam(res.data.exam);
@@ -65,7 +66,7 @@ const ExamPage = () => {
     const startAttempt = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.post('https://quiz-exam-portal-4rqm.onrender.com/api/attempts/start', {
+            const res = await axios.post(`${API_URL}/attempts/start`, {
                 examId: id
             }, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -95,7 +96,7 @@ const ExamPage = () => {
         try {
             setIsSaving(true);
             const token = localStorage.getItem('token');
-            await axios.post('https://quiz-exam-portal-4rqm.onrender.com/api/attempts/answers/save', {
+            await axios.post(`${API_URL}/attempts/answers/save`, {
                 attemptId,
                 questionId: qId,
                 answer: val
@@ -109,11 +110,14 @@ const ExamPage = () => {
         }
     };
 
-    const handleSubmit = async () => {
+    const submitExam = async () => {
+        if (!window.confirm('Are you sure you want to finish and submit?')) return;
+        
+        setIsSubmitting(true);
         try {
             toast.loading('Finalizing submission...', { id: 'submit-toast' });
             const token = localStorage.getItem('token');
-            await axios.post(`https://quiz-exam-portal-4rqm.onrender.com/api/attempts/${attemptId}/submit`, {}, {
+            await axios.post(`${API_URL}/attempts/${attemptId}/submit`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             

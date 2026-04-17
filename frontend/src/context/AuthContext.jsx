@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
-export const AuthContext = createContext();
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -20,7 +22,7 @@ export const AuthProvider = ({ children }) => {
 
     const fetchUser = async (token) => {
         try {
-            const res = await axios.get('https://quiz-exam-portal-4rqm.onrender.com/api/auth/me', {
+            const res = await axios.get(`${API_URL}/auth/me`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUser(res.data);
@@ -33,7 +35,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const login = async (email, password) => {
-        const res = await axios.post('https://quiz-exam-portal-4rqm.onrender.com/api/auth/login', { email, password });
+        const res = await axios.post(`${API_URL}/auth/login`, { email, password });
         localStorage.setItem('token', res.data.token);
         setUser(res.data.user);
         return res.data;

@@ -4,6 +4,7 @@ import { Mail, Lock, User, GraduationCap, ArrowLeft, ArrowRight } from 'lucide-r
 import { Button } from '../components/common';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import { API_URL } from '../context/AuthContext';
 
 const Register = () => {
     const [formData, setFormData] = useState({ name: '', email: '', password: '' });
@@ -14,7 +15,7 @@ const Register = () => {
         e.preventDefault();
         setIsLoading(true);
         try {
-            await axios.post('https://quiz-exam-portal-4rqm.onrender.com/api/auth/register', {
+            await axios.post(`${API_URL}/auth/register`, {
                 ...formData,
                 role: 'student'
             });
