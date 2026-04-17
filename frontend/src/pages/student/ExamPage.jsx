@@ -50,7 +50,7 @@ const ExamPage = () => {
     const fetchExamData = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`http://localhost:5000/api/exams/${id}`, {
+            const res = await axios.get(`https://quiz-exam-portal-4rqm.onrender.com/api/exams/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setExam(res.data.exam);
@@ -65,7 +65,7 @@ const ExamPage = () => {
     const startAttempt = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.post('http://localhost:5000/api/attempts/start', {
+            const res = await axios.post('https://quiz-exam-portal-4rqm.onrender.com/api/attempts/start', {
                 examId: id
             }, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -95,7 +95,7 @@ const ExamPage = () => {
         try {
             setIsSaving(true);
             const token = localStorage.getItem('token');
-            await axios.post('http://localhost:5000/api/attempts/answers/save', {
+            await axios.post('https://quiz-exam-portal-4rqm.onrender.com/api/attempts/answers/save', {
                 attemptId,
                 questionId: qId,
                 answer: val
@@ -113,7 +113,7 @@ const ExamPage = () => {
         try {
             toast.loading('Finalizing submission...', { id: 'submit-toast' });
             const token = localStorage.getItem('token');
-            await axios.post(`http://localhost:5000/api/attempts/${attemptId}/submit`, {}, {
+            await axios.post(`https://quiz-exam-portal-4rqm.onrender.com/api/attempts/${attemptId}/submit`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             

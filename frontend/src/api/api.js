@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-    baseURL: 'http://localhost:5000/api',
+    baseURL: 'https://quiz-exam-portal-4rqm.onrender.com/api',
 });
 
 // Add a request interceptor to include the auth token

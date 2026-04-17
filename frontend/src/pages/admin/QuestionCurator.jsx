@@ -35,8 +35,8 @@ const QuestionCurator = () => {
         try {
             const token = localStorage.getItem('token');
             const [examRes, qRes] = await Promise.all([
-                axios.get(`http://localhost:5000/api/exams/${examId}`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`http://localhost:5000/api/questions/${examId}`, { headers: { Authorization: `Bearer ${token}` } })
+                axios.get(`https://quiz-exam-portal-4rqm.onrender.com/api/exams/${examId}`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`https://quiz-exam-portal-4rqm.onrender.com/api/questions/${examId}`, { headers: { Authorization: `Bearer ${token}` } })
             ]);
             setExam(examRes.data.exam);
             setQuestions(qRes.data);
