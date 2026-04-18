@@ -87,7 +87,7 @@ const ResultPage = () => {
                                             <div className="flex items-center gap-3">
                                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                                                     <Clock size={12} /> {new Date(item.end_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                }</span>
+                                                </span>
                                                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
                                                 <span className={cn(
                                                     "text-[10px] font-black uppercase tracking-widest",

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Card, Button } from '../../components/common';
 import { toast } from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 
 const QuestionUpload = () => {
     const [uploadMode, setUploadMode] = useState('manual'); // 'manual' or 'bulk'
@@ -57,6 +58,46 @@ const QuestionUpload = () => {
         setManualQuestions(manualQuestions.filter(q => q.id !== id));
     };
 
+    const downloadTemplate = () => {
+        const data = [
+            {
+                "Question": "What is the capital of France?",
+                "Type": "mcq",
+                "Option A": "London",
+                "Option B": "Paris",
+                "Option C": "Berlin",
+                "Option D": "Madrid",
+                "Answer": "B",
+                "Points": 5
+            },
+            {
+                "Question": "Is the earth flat?",
+                "Type": "mcq",
+                "Option A": "Yes",
+                "Option B": "No",
+                "Answer": "No",
+                "Points": 2
+            },
+            {
+                "Question": "What is 10 + 20?",
+                "Type": "short_answer",
+                "Answer": "30",
+                "Points": 10
+            },
+            {
+                "Question": "Write a function to return 'Hello World'.",
+                "Type": "coding",
+                "Answer": "function hello() { return 'Hello World'; }",
+                "Points": 20
+            }
+        ];
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Questions Template");
+        XLSX.writeFile(wb, "question_ingestion_template.xlsx");
+        toast.success('Download triggered successfully');
+    };
+
     const handleFileSelect = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -90,6 +131,19 @@ const QuestionUpload = () => {
         } finally {
             setIsParsing(false);
         }
+    };
+
+    const updateBulkQuestion = (idx, field, value) => {
+        const newQuestions = [...bulkQuestions];
+        const q = newQuestions[idx];
+        q[field] = value;
+        
+        // Simple re-validation for text
+        if (field === 'question_text' && value.trim()) {
+            if (q.error === 'Question text is missing') q.error = null;
+        }
+        
+        setBulkQuestions(newQuestions);
     };
 
     const handleManualSubmit = async () => {
@@ -329,6 +383,13 @@ const QuestionUpload = () => {
                                 </Button>
                             </div>
 
+                            <button 
+                                onClick={downloadTemplate}
+                                className="mt-6 flex items-center gap-2 text-slate-400 hover:text-slate-900 font-bold text-xs uppercase tracking-widest transition-all"
+                            >
+                                <FileSpreadsheet size={16} /> Download Sample Template
+                            </button>
+
                             <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-12 w-full max-w-3xl border-t border-slate-100 pt-16">
                                 <div className="text-center group">
                                     <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-4 font-black transition-all group-hover:bg-slate-900 group-hover:text-white">1</div>
@@ -398,30 +459,59 @@ const QuestionUpload = () => {
                                             {q.row_number}
                                         </div>
                                         <div className="flex-1 space-y-4">
-                                            <div className="flex items-start justify-between">
-                                                <h4 className="font-bold text-slate-900 decoration-slate-200">{q.question_text}</h4>
-                                                <div className="flex gap-2">
-                                                    <span className="px-3 py-1 bg-slate-100 text-[10px] font-black uppercase text-slate-500 rounded-lg">{q.question_type}</span>
-                                                    <span className="px-3 py-1 bg-slate-100 text-[10px] font-black uppercase text-slate-500 rounded-lg">{q.points} Pts</span>
+                                            <div className="flex items-start justify-between gap-4">
+                                                <textarea 
+                                                    className="flex-1 bg-transparent border-none p-0 font-bold text-slate-900 focus:ring-0 resize-none min-h-[40px]"
+                                                    value={q.question_text}
+                                                    onChange={(e) => updateBulkQuestion(idx, 'question_text', e.target.value)}
+                                                />
+                                                <div className="flex gap-2 shrink-0">
+                                                    <select 
+                                                        value={q.question_type}
+                                                        onChange={(e) => updateBulkQuestion(idx, 'question_type', e.target.value)}
+                                                        className="bg-slate-100 text-[10px] font-black uppercase text-slate-500 rounded-lg px-2 py-1 outline-none border-none"
+                                                    >
+                                                        <option value="mcq">MCQ</option>
+                                                        <option value="short_answer">Short</option>
+                                                        <option value="coding">Coding</option>
+                                                    </select>
+                                                    <input 
+                                                        type="number"
+                                                        value={q.points}
+                                                        onChange={(e) => updateBulkQuestion(idx, 'points', parseInt(e.target.value) || 0)}
+                                                        className="w-12 bg-slate-100 text-[10px] font-black uppercase text-slate-500 rounded-lg px-2 py-1 outline-none border-none text-center"
+                                                    />
                                                 </div>
                                             </div>
                                             
                                             {q.options && q.options.length > 0 && (
                                                 <div className="flex flex-wrap gap-2">
                                                     {q.options.map((opt, oIdx) => (
-                                                        <span key={oIdx} className={cn(
-                                                            "px-3 py-1.5 rounded-xl text-[10px] font-bold border",
-                                                            opt === q.correct_answer ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-slate-50 border-slate-100 text-slate-500"
-                                                        )}>
-                                                            {opt}
-                                                        </span>
+                                                        <input 
+                                                            key={oIdx}
+                                                            className={cn(
+                                                                "px-3 py-1.5 rounded-xl text-[10px] font-bold border outline-none transition-all",
+                                                                opt === q.correct_answer ? "bg-emerald-50 border-emerald-200 text-emerald-600 w-auto" : "bg-slate-50 border-slate-100 text-slate-500 w-auto"
+                                                            )}
+                                                            value={opt}
+                                                            onChange={(e) => {
+                                                                const newOpts = [...q.options];
+                                                                newOpts[oIdx] = e.target.value;
+                                                                updateBulkQuestion(idx, 'options', newOpts);
+                                                            }}
+                                                        />
                                                     ))}
                                                 </div>
                                             )}
 
                                             {(!q.options || q.options.length === 0) && (
-                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[10px] font-mono text-slate-500 truncate">
-                                                    Benchmark: {q.correct_answer}
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Benchmark Solution</p>
+                                                    <input 
+                                                        className="w-full bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 text-[10px] font-mono text-slate-500 outline-none focus:border-slate-200"
+                                                        value={q.correct_answer}
+                                                        onChange={(e) => updateBulkQuestion(idx, 'correct_answer', e.target.value)}
+                                                    />
                                                 </div>
                                             )}
 

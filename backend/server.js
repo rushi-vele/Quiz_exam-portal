@@ -36,10 +36,10 @@ app.use('/api/attempts', attemptRoutes);
 app.use('/api/results', resultRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/admin/students', require('./routes/studentRoutes'));
 app.use('/api/admin', adminRoutes);
 app.use('/api/retake', retakeRoutes);
 app.use('/api/notifications', require('./routes/notificationRoutes'));
-app.use('/api/admin/students', require('./routes/studentRoutes'));
 app.use('/api/code', require('./routes/codeRoutes'));
 
 // Custom Answer route as requested

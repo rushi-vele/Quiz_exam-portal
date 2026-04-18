@@ -20,50 +20,71 @@ exports.parseExcel = async (req, res) => {
 
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         if (!workbook || !workbook.SheetNames.length) {
-            return res.status(415).json({ message: 'Unsupported or corrupted file format. PDF and other document types are not supported.' });
+            return res.status(415).json({ message: 'Unsupported or corrupted file format.' });
         }
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const data = xlsx.utils.sheet_to_json(sheet);
         
-        const extractedQuestions = data.map((row, index) => {
-            // Normalize row keys for high-tolerance mapping
-            const clean = {};
-            Object.keys(row).forEach(k => {
-                const normalizedK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-                clean[normalizedK] = row[k];
-            });
+        const ALIASES = {
+            question: ['question', 'question_text', 'questiontext', 'text', 'prompt', 'query', 'ques', 'description'],
+            type: ['type', 'question_type', 'questiontype', 'kind', 'category'],
+            points: ['points', 'marks', 'weight', 'score', 'pts'],
+            answer: ['answer', 'correct_answer', 'correctanswer', 'correct', 'solution', 'key', 'correct_option'],
+            options: {
+                a: ['a', 'option_a', 'optiona', 'opt_a', 'choice_a', 'option1', 'opt1', '1'],
+                b: ['b', 'option_b', 'optionb', 'opt_b', 'choice_b', 'option2', 'opt2', '2'],
+                c: ['c', 'option_c', 'optionc', 'opt_c', 'choice_c', 'option3', 'opt3', '3'],
+                d: ['d', 'option_d', 'optiond', 'opt_d', 'choice_d', 'option4', 'opt4', '4']
+            }
+        };
 
-            const q_text = clean.question || clean.questiontext || clean.text || clean.prompt || clean.query;
-            const q_type = String(clean.questiontype || clean.type || 'mcq').toLowerCase().trim();
-            const q_marks = parseInt(clean.marks || clean.points || 1);
-            const raw_correct = String(clean.correctanswer || clean.answer || clean.correct || '').trim();
+        const findValue = (row, aliases) => {
+            const keys = Object.keys(row);
+            for (const alias of aliases) {
+                const foundKey = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === alias.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                if (foundKey) return row[foundKey];
+            }
+            return null;
+        };
+
+        const extractedQuestions = data.map((row, index) => {
+            const q_text = findValue(row, ALIASES.question);
+            let q_type = String(findValue(row, ALIASES.type) || '').toLowerCase().trim();
+            const q_marks = parseInt(findValue(row, ALIASES.points) || 5);
+            const raw_correct = String(findValue(row, ALIASES.answer) || '').trim();
             
-            let options = [];
+            const optA = String(findValue(row, ALIASES.options.a) || '').trim();
+            const optB = String(findValue(row, ALIASES.options.b) || '').trim();
+            const optC = String(findValue(row, ALIASES.options.c) || '').trim();
+            const optD = String(findValue(row, ALIASES.options.d) || '').trim();
+            
+            let options = [optA, optB, optC, optD].filter(Boolean);
+            
+            // Auto-detect type if missing
+            if (!q_type) {
+                q_type = options.length >= 2 ? 'mcq' : 'short_answer';
+            }
+
             let error = null;
             let final_correct = raw_correct;
 
-            // Field mandatory validation
-            if (!q_text || !raw_correct || isNaN(q_marks)) {
-                error = 'Missing required fields (question/correctAnswer/marks)';
+            if (!q_text) {
+                error = 'Question text is missing';
+            } else if (!raw_correct) {
+                error = 'Correct answer is missing';
             } else if (!['mcq', 'short_answer', 'coding'].includes(q_type)) {
-                error = 'Invalid type. Use: mcq, short_answer, or coding';
+                error = `Invalid type "${q_type}". Use: mcq, short_answer, or coding`;
             } else if (q_type === 'mcq') {
-                options = [
-                    String(clean.optiona || clean.a || clean.option1 || '').trim(),
-                    String(clean.optionb || clean.b || clean.option2 || '').trim(),
-                    String(clean.optionc || clean.c || clean.option3 || '').trim(),
-                    String(clean.optiond || clean.d || clean.option4 || '').trim()
-                ];
-                
-                if (options.some(opt => !opt)) {
-                    error = 'MCQ requires all 4 options (A-D)';
+                if (options.length < 2) {
+                    error = 'MCQ requires at least 2 options';
                 } else {
+                    // Handle A, B, C, D or 1, 2, 3, 4 mapping
+                    const indexMap = { 'A': 0, 'B': 1, 'C': 2, 'D': 3, '1': 0, '2': 1, '3': 2, '4': 3 };
                     const upperCorrect = raw_correct.toUpperCase();
-                    const indexMap = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 };
-                    if (indexMap[upperCorrect] !== undefined) {
+                    if (indexMap[upperCorrect] !== undefined && options[indexMap[upperCorrect]]) {
                         final_correct = options[indexMap[upperCorrect]];
-                    } else if (!options.includes(raw_correct)) {
-                        error = 'MCQ correctAnswer must be A, B, C, D or the option text';
+                    } else if (!options.map(o => o.toLowerCase()).includes(raw_correct.toLowerCase())) {
+                        error = 'Answer must match one of the options or be A, B, C, D';
                     }
                 }
             }
@@ -71,8 +92,8 @@ exports.parseExcel = async (req, res) => {
             return {
                 question_text: q_text,
                 question_type: q_type,
-                options: options,
-                correct_answer: String(final_correct || ''),
+                options: q_type === 'mcq' ? options : [],
+                correct_answer: final_correct,
                 points: q_marks,
                 row_number: index + 2,
                 error: error

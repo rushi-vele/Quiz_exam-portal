@@ -121,7 +121,8 @@ const initializeSchema = async () => {
             "ALTER TABLE leaderboard ADD COLUMN total_score INTEGER",
             "ALTER TABLE leaderboard ADD COLUMN time_taken INTEGER",
             "ALTER TABLE leaderboard ADD COLUMN percentage REAL",
-            "ALTER TABLE leaderboard ADD COLUMN achieved_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+            "ALTER TABLE leaderboard ADD COLUMN achieved_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_leaderboard_user_exam ON leaderboard(user_id, exam_id)"
         ];
 
         for (const cmd of alterCommands) {

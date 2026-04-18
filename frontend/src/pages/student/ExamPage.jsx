@@ -27,25 +27,31 @@ const ExamPage = () => {
     const [answers, setAnswers] = useState({});
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+    const [attemptId, setAttemptId] = useState(null);
 
     useEffect(() => {
-        fetchExamData();
+        const initialize = async () => {
+            try {
+                setLoading(true);
+                const examData = await fetchExamData();
+                if (examData) {
+                    await startAttempt();
+                }
+            } catch (err) {
+                console.error("Initialization failed:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        initialize();
+
         // Load progress from localStorage if exists
         const saved = localStorage.getItem(`exam_progress_${id}`);
         if (saved) {
             setAnswers(JSON.parse(saved));
         }
-    }, [id]);
-
-    const [attemptId, setAttemptId] = useState(null);
-
-    useEffect(() => {
-        const initializeExam = async () => {
-            await fetchExamData();
-            await startAttempt();
-        };
-        initializeExam();
     }, [id]);
 
     const fetchExamData = async () => {
@@ -56,10 +62,10 @@ const ExamPage = () => {
             });
             setExam(res.data.exam);
             setQuestions(res.data.questions);
+            return res.data;
         } catch (err) {
             toast.error('Failed to load exam details');
-        } finally {
-            setLoading(false);
+            return null;
         }
     };
 
@@ -110,9 +116,7 @@ const ExamPage = () => {
         }
     };
 
-    const submitExam = async () => {
-        if (!window.confirm('Are you sure you want to finish and submit?')) return;
-        
+    const handleSubmit = async () => {
         setIsSubmitting(true);
         try {
             toast.loading('Finalizing submission...', { id: 'submit-toast' });
@@ -126,6 +130,8 @@ const ExamPage = () => {
             navigate(`/student/results/${attemptId}`);
         } catch (err) {
             toast.error('Submission failed. Please try again.', { id: 'submit-toast' });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -292,7 +298,14 @@ const ExamPage = () => {
                         </p>
                         <div className="grid grid-cols-2 gap-4 mt-12">
                             <button onClick={() => setShowConfirm(false)} className="py-5 px-8 rounded-3xl border-2 border-slate-100 text-slate-400 font-black uppercase text-xs tracking-widest hover:border-slate-200 hover:text-slate-900 transition-all">Resume Curation</button>
-                            <Button variant="primary" onClick={handleSubmit} className="bg-emerald-600 hover:bg-emerald-700 py-5 h-auto rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl shadow-emerald-500/20">Execute Submission</Button>
+                            <Button 
+                                variant="primary" 
+                                onClick={handleSubmit} 
+                                disabled={isSubmitting}
+                                className="bg-emerald-600 hover:bg-emerald-700 py-5 h-auto rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl shadow-emerald-500/20"
+                            >
+                                {isSubmitting ? 'Processing...' : 'Execute Submission'}
+                            </Button>
                         </div>
                     </div>
                 </div>

@@ -15,7 +15,7 @@ exports.createExam = async (req, res) => {
 
         const result = await client.execute({
             sql: 'INSERT INTO exams (title, description, duration, total_marks, passing_marks, total_questions, published, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            args: [title, description, duration, total_marks, passing_marks, total_questions || 0, 0, req.user.id]
+            args: [title, description, duration, total_marks, passing_marks, total_questions || 0, published ? 1 : 0, req.user.id]
         });
 
         res.status(201).json({ id: Number(result.lastInsertRowid), title, description, duration });
@@ -98,64 +98,96 @@ exports.updateExam = async (req, res) => {
     }
 };
 
-exports.publishExam = async (req, res) => {
+exports.toggleExamStatus = async (req, res) => {
     try {
+        const { id } = req.params;
         const examRes = await client.execute({
-            sql: 'SELECT title FROM exams WHERE id = ?',
-            args: [req.params.id]
+            sql: 'SELECT id, title, published FROM exams WHERE id = ?',
+            args: [id]
         });
         const exam = examRes.rows[0];
-        if (!exam) return res.status(404).json({ message: 'Exam not found' });
+        if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
 
+        const newStatus = (exam.published === 1 || exam.published === true) ? 0 : 1;
         await client.execute({
-            sql: 'UPDATE exams SET published = 1 WHERE id = ?',
-            args: [req.params.id]
+            sql: 'UPDATE exams SET published = ? WHERE id = ?',
+            args: [newStatus, id]
         });
 
-        // Trigger Notification for Students
-        const { createNotify } = require('./notificationController');
-        await createNotify({
-            recipient_role: 'student',
-            sender_id: req.user.id,
-            message: `Official Release: The assessment "${exam.title}" is now live and available for participation.`,
-            type: 'exam_created',
-            exam_id: Number(req.params.id)
-        });
+        // Trigger notification only when publishing
+        if (newStatus === 1) {
+            try {
+                const { createNotify } = require('./notificationController');
+                await createNotify({
+                    recipient_role: 'student',
+                    sender_id: req.user.id,
+                    message: `Strategic Update: The assessment "${exam.title}" has been officially published and is now open for enrollment.`,
+                    type: 'exam_created',
+                    exam_id: Number(id)
+                });
+            } catch (notifyError) {
+                console.error('Notification failed but exam was toggled:', notifyError);
+            }
+        }
 
-        res.json({ message: 'Exam Published Successfully' });
+        res.json({ 
+            success: true, 
+            published: newStatus === 1,
+            message: `Assessment ${newStatus ? 'Published and Distributed' : 'Reverted to Draft'} Successfully` 
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 exports.deleteExam = async (req, res) => {
     try {
         const examId = req.params.id;
         
-        // Step 1: Delete deep-linked data (Answers are linked via attempts)
-        // Since answers has ON DELETE CASCADE with attempts, it will be handled when we delete attempts.
-        // However, we should be explicit for non-cascading tables linked to examId.
+        console.log(`Starting deep delete for exam ID: ${examId}`);
 
-        // Delete leaderboard entries
+        // Sequence of deletions to respect dependencies
+        // 1. Leaderboard entries
         await client.execute({ sql: 'DELETE FROM leaderboard WHERE exam_id = ?', args: [examId] });
 
-        // Delete retake requests
+        // 2. Retake requests
         await client.execute({ sql: 'DELETE FROM retake_requests WHERE exam_id = ?', args: [examId] });
 
-        // Delete notifications linked to this exam
+        // 3. Notifications
         await client.execute({ sql: 'DELETE FROM notifications WHERE exam_id = ?', args: [examId] });
 
-        // Delete attempts (this will CASCADE to answers)
-        await client.execute({ sql: 'DELETE FROM attempts WHERE exam_id = ?', args: [examId] });
+        // 4. Attempts & Answers (Answers are deleted via CASCADE in DB if configured, or manually)
+        // Check if answers needs manual deletion if CASCADE is missing
+        const attemptIdsResult = await client.execute({ sql: 'SELECT id FROM attempts WHERE exam_id = ?', args: [examId] });
+        const attemptIds = attemptIdsResult.rows.map(r => r.id);
+        
+        if (attemptIds.length > 0) {
+            const placeholders = attemptIds.map(() => '?').join(',');
+            await client.execute({ 
+                sql: `DELETE FROM answers WHERE attempt_id IN (${placeholders})`, 
+                args: attemptIds 
+            });
+            await client.execute({ sql: 'DELETE FROM attempts WHERE exam_id = ?', args: [examId] });
+        }
 
-        // Delete questions (this will CASCADE to answers if question_id is used, but mostly CASCADE is on attempts)
+        // 5. Questions
         await client.execute({ sql: 'DELETE FROM questions WHERE exam_id = ?', args: [examId] });
 
-        // Final step: Delete the exam itself
-        await client.execute({ sql: 'DELETE FROM exams WHERE id = ?', args: [examId] });
+        // 6. Final step: The Exam
+        const result = await client.execute({ sql: 'DELETE FROM exams WHERE id = ?', args: [examId] });
 
-        res.json({ message: 'Exam and all associated records deleted successfully' });
+        if (result.rowsAffected === 0) {
+            return res.status(404).json({ success: false, message: 'Exam not found' });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Exam and all associated intelligence eradicated successfully' 
+        });
     } catch (error) {
-        console.error('Delete Error:', error);
-        res.status(500).json({ message: `Failed to delete assessment: ${error.message}` });
+        console.error('CRITICAL DELETE ERROR:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: `Ingestion failure: ${error.message}` 
+        });
     }
 };

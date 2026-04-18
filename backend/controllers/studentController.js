@@ -35,7 +35,7 @@ exports.getStudents = async (req, res) => {
         // Fetch students and count their attempts as "enrolled"
         const result = await client.execute(`
             SELECT u.id, u.name, u.email, u.created_at,
-            (SELECT COUNT(*) FROM exam_attempts WHERE user_id = u.id) as enrolledCount
+            (SELECT COUNT(*) FROM attempts WHERE user_id = u.id) as enrolledCount
             FROM users u 
             WHERE u.role = 'student'
             ORDER BY u.created_at DESC
@@ -92,7 +92,7 @@ exports.deleteStudent = async (req, res) => {
 
         // Cleanup attempts first
         await client.execute({
-            sql: 'DELETE FROM exam_attempts WHERE user_id = ?',
+            sql: 'DELETE FROM attempts WHERE user_id = ?',
             args: [studentId]
         });
 

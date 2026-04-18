@@ -27,8 +27,10 @@ const Leaderboard = () => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
+                // Admins see all exams for leaderboard, students see only active
+                const examUrl = user?.role === 'admin' ? '/exams' : '/exams/active';
                 const [examsRes, leaderRes] = await Promise.all([
-                    API.get('/exams/active'),
+                    API.get(examUrl),
                     API.get('/leaderboard/global')
                 ]);
                 setExams(examsRes.data);
@@ -39,8 +41,8 @@ const Leaderboard = () => {
                 setIsLoading(false);
             }
         };
-        fetchInitialData();
-    }, []);
+        if (user) fetchInitialData();
+    }, [user]);
 
     const handleExamChange = async (examId) => {
         setIsLoading(true);

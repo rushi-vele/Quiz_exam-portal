@@ -191,11 +191,11 @@ exports.submitExam = async (req, res) => {
             args: [attempt.exam_id]
         });
         const exam = examRes.rows[0];
-        const totalMarks = Number(exam.total_marks || 100);
+        const totalMarks = Math.max(Number(exam.total_marks || 100), 1);
         const percentage = (finalScore / totalMarks) * 100;
 
         // Calculate time taken
-        const startTime = new Date(attempt.start_time).getTime();
+        const startTime = new Date(attempt.start_time + 'Z').getTime();
         const endTime = Date.now();
         const timeTaken = Math.round((endTime - startTime) / 1000); // seconds
 

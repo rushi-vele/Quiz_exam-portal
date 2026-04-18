@@ -29,6 +29,8 @@ const ManageExams = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [deleteConfig, setDeleteConfig] = useState({ isOpen: false, exam: null });
     const [editingExamId, setEditingExamId] = useState(null);
     const [currentStep, setCurrentStep] = useState(0); 
     const [createdExamId, setCreatedExamId] = useState(null);
@@ -39,7 +41,7 @@ const ManageExams = () => {
         duration: '',
         total_marks: 100,
         passing_marks: 40,
-        totalQuestions: 10,
+        total_questions: 10,
         defaultMarks: 10,
         published: true
     });
@@ -56,8 +58,8 @@ const ManageExams = () => {
             parseInt(newExam.duration) > 0 &&
             newExam.total_marks && 
             parseInt(newExam.total_marks) > 0 &&
-            newExam.totalQuestions && 
-            parseInt(newExam.totalQuestions) > 0
+            newExam.total_questions && 
+            parseInt(newExam.total_questions) > 0
         );
     };
 
@@ -83,25 +85,33 @@ const ManageExams = () => {
             return toast.error('Duration and Marks must be positive integers');
         }
 
+        const actionToast = toast.loading(isEditing ? 'Updating blueprint...' : 'Initializing blueprint...');
+
         try {
             if (isEditing) {
                 await API.put(`/exams/${editingExamId}`, newExam);
-                toast.success('Exam blueprint updated successfully!');
+                toast.success('Blueprint refined successfully!', { id: actionToast });
+                setExams(prev => prev.map(ex => ex.id === editingExamId ? { ...ex, ...newExam } : ex));
                 setShowModal(false);
                 resetForm();
             } else {
                 const res = await API.post('/exams', newExam);
-                toast.success('Blueprint initialized! Now curate your questions.');
+                toast.success('Blueprint initialized! Now curate your questions.', { id: actionToast });
+                setExams(prev => [res.data, ...prev]);
                 setCreatedExamId(res.data.id);
                 setCurrentStep(1);
             }
-            fetchExams(); 
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Operation failed');
+            console.error('Submit Error:', err);
+            toast.error(err.response?.data?.message || 'Interface submission failure', { id: actionToast });
         }
     };
 
-    const handleEdit = (exam) => {
+    const handleEdit = (e, exam) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         setIsEditing(true);
         setEditingExamId(exam.id);
         setNewExam({
@@ -110,29 +120,41 @@ const ManageExams = () => {
             duration: exam.duration,
             total_marks: exam.total_marks,
             passing_marks: exam.passing_marks,
-            totalQuestions: exam.total_questions,
+            total_questions: exam.total_questions,
             defaultMarks: Math.floor(exam.total_marks / exam.total_questions) || 10,
-            published: exam.published === 1
+            published: (exam.published === 1 || exam.published === true)
         });
         setCurrentStep(0);
         setShowModal(true);
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Delete this assessment? This will erase all questions and student attempts irreversibly.')) return;
+        if (!id) return;
+        
+        const deleteToast = toast.loading('Purging assessment from registry...');
+        setDeleteConfig({ isOpen: false, exam: null });
         
         try {
-            await API.delete(`/exams/${id}`);
-            toast.success('Assessment eradicated successfully');
-            setExams(exams.filter(e => e.id !== id));
+            console.log('Sending DELETE request for ID:', id);
+            const res = await API.delete(`/exams/${id}`);
+            
+            if (res.data.success) {
+                toast.success(res.data.message || 'Entity purged successfully', { id: deleteToast });
+                // Filter out the deleted exam from state instantly
+                setExams(prev => prev.filter(item => String(item.id) !== String(id)));
+            } else {
+                throw new Error(res.data.message || 'Purge protocol failed');
+            }
         } catch (err) {
-            toast.error('Failed to delete exam');
+            console.error('CRITICAL PURGE ERROR:', err);
+            const errorMsg = err.response?.data?.message || err.message || 'Communication failure';
+            toast.error(`Registry Access Failure: ${errorMsg}`, { id: deleteToast });
         }
     };
 
     const addQuestionField = () => {
-        if (questions.length >= newExam.totalQuestions) {
-            return toast.error(`Limit of ${newExam.totalQuestions} questions reached.`);
+        if (questions.length >= newExam.total_questions) {
+            return toast.error(`Limit of ${newExam.total_questions} questions reached.`);
         }
         setQuestions([...questions, {
             question_text: '',
@@ -160,8 +182,8 @@ const ManageExams = () => {
     };
 
     const handleSaveQuestions = async () => {
-        if (questions.length !== parseInt(newExam.totalQuestions)) {
-            return toast.error(`Please add exactly ${newExam.totalQuestions} questions.`);
+        if (questions.length !== parseInt(newExam.total_questions)) {
+            return toast.error(`Please add exactly ${newExam.total_questions} questions.`);
         }
         
         const currentTotalPoints = questions.reduce((acc, q) => acc + parseInt(q.points || 0), 0);
@@ -187,15 +209,38 @@ const ManageExams = () => {
         }
     };
 
-    const handlePublish = async (id) => {
-        if (!window.confirm('Are you sure you want to publish this exam? This will make it visible to all students instantly.')) return;
+    const handleToggleStatus = async (e, exam) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        const isActivating = !exam.published;
+        const actionLabel = isActivating ? 'Publishing' : 'Deactivating';
+        
+        // Optimistic Update: Reflect change instantly in UI
+        const previousExams = [...exams];
+        setExams(prev => prev.map(ex => 
+            ex.id === exam.id ? { ...ex, published: isActivating ? 1 : 0 } : ex
+        ));
+
+        const toggleToast = toast.loading(`${actionLabel} assessment "${exam.title}"...`);
         
         try {
-            await API.put(`/exams/${id}/publish`);
-            toast.success('Exam Published Successfully');
-            fetchExams();
+            const res = await API.put(`/exams/${exam.id}/toggle`);
+            if (res.data.success) {
+                toast.success(res.data.message, { id: toggleToast });
+                // Synchronize with server state just in case
+                setExams(prev => prev.map(ex => 
+                    ex.id === exam.id ? { ...ex, published: res.data.published ? 1 : 0 } : ex
+                ));
+            } else {
+                throw new Error(res.data.message || 'Operation failed');
+            }
         } catch (err) {
-            toast.error('Failed to publish exam');
+            // Rollback on failure
+            setExams(previousExams);
+            toast.error(err.response?.data?.message || `Failed to ${isActivating ? 'activate' : 'deactivate'} exam`, { id: toggleToast });
         }
     };
 
@@ -203,7 +248,7 @@ const ManageExams = () => {
     const publishedCount = exams.filter(e => e.published).length;
 
     const resetForm = () => {
-        setNewExam({ title: '', description: '', duration: '', total_marks: 100, passing_marks: 40, totalQuestions: 10, defaultMarks: 10 });
+        setNewExam({ title: '', description: '', duration: '', total_marks: 100, passing_marks: 40, total_questions: 10, defaultMarks: 10 });
         setQuestions([]);
         setCurrentStep(0);
         setCreatedExamId(null);
@@ -296,21 +341,22 @@ const ManageExams = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5 text-center">
-                                                {exam.published ? (
-                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm">
-                                                        <CheckCircle2 size={12} /> Active
-                                                    </span>
-                                                ) : (
-                                                    <button 
-                                                        onClick={() => handlePublish(exam.id)}
-                                                        className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-slate-50 text-slate-500 border border-slate-100 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm"
-                                                    >
-                                                        <Clock size={12} className="group-hover:animate-pulse" /> Draft · Publish
-                                                    </button>
-                                                )}
+                                                <button 
+                                                    type="button"
+                                                    onClick={(e) => handleToggleStatus(e, exam)}
+                                                    className={cn(
+                                                        "group inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 shadow-sm border",
+                                                        exam.published 
+                                                            ? "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-600 hover:text-white" 
+                                                            : "bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-900 hover:text-white hover:shadow-lg"
+                                                    )}
+                                                >
+                                                    {exam.published ? <CheckCircle2 size={12} className="group-hover:scale-125 transition-transform" /> : <Clock size={12} className="group-hover:scale-125 transition-transform" />}
+                                                    {exam.published ? 'Active · Deactivate' : 'Draft · Publish'}
+                                                </button>
                                             </td>
                                             <td className="px-6 py-5 text-right whitespace-nowrap">
-                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                <div className="flex items-center justify-end gap-2 transition-all">
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
@@ -320,14 +366,18 @@ const ManageExams = () => {
                                                         <PlusSquare size={14} /> Questions
                                                     </Button>
                                                     <button 
-                                                        onClick={() => handleEdit(exam)}
+                                                        type="button"
+                                                        onClick={(e) => handleEdit(e, exam)}
                                                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-primary-600 hover:border-primary-200 hover:shadow-lg transition-all"
+                                                        title="Edit exam"
                                                     >
                                                         <Edit3 size={18} />
                                                     </button>
                                                     <button 
-                                                        onClick={() => handleDelete(exam.id)}
-                                                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 hover:shadow-lg transition-all"
+                                                        type="button"
+                                                        onClick={() => setDeleteConfig({ isOpen: true, exam })}
+                                                        className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 hover:shadow-lg hover:shadow-red-500/10 transition-all active:scale-95"
+                                                        title="Eradicate Blueprint"
                                                     >
                                                         <Trash2 size={18} />
                                                     </button>
@@ -351,7 +401,7 @@ const ManageExams = () => {
                             <div>
                                 <h2 className="text-xl font-black tracking-tight">{currentStep === 0 ? (isEditing ? 'Update Blueprint' : 'Assessment Blueprint') : 'Curate Question Portfolio'}</h2>
                                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-1 opacity-70">
-                                    {currentStep === 0 ? 'Define the fundamental parameters of the examination.' : `Step 2: Add ${newExam.totalQuestions} mandatory questions.`}
+                                    {currentStep === 0 ? 'Define the fundamental parameters of the examination.' : `Step 2: Add ${newExam.total_questions} mandatory questions.`}
                                 </p>
                             </div>
                             <button onClick={() => setShowModal(false)} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all text-white border border-white/10">
@@ -406,8 +456,8 @@ const ManageExams = () => {
                                                         type="number" 
                                                         required
                                                         className="w-full text-center bg-white border-2 border-slate-100 focus:border-primary-500 rounded-2xl py-3.5 font-black outline-none transition-all"
-                                                        value={newExam.totalQuestions}
-                                                        onChange={e => setNewExam({...newExam, totalQuestions: e.target.value})}
+                                                        value={newExam.total_questions}
+                                                        onChange={e => setNewExam({...newExam, total_questions: e.target.value})}
                                                     />
                                                 </div>
                                                 <div className="space-y-1.5">
@@ -440,9 +490,9 @@ const ManageExams = () => {
                                             <div className="flex flex-col">
                                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Curation Progress</span>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-2xl font-black text-slate-900">{questions.length} / {newExam.totalQuestions}</span>
+                                                    <span className="text-2xl font-black text-slate-900">{questions.length} / {newExam.total_questions}</span>
                                                     <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                        <div className="h-full bg-primary-600 transition-all duration-500" style={{ width: `${(questions.length / newExam.totalQuestions) * 100}%` }}></div>
+                                                        <div className="h-full bg-primary-600 transition-all duration-500" style={{ width: `${(questions.length / newExam.total_questions) * 100}%` }}></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -582,6 +632,36 @@ const ManageExams = () => {
                                     </Button>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Status Feedback Confirmation Modal */}
+            {deleteConfig.isOpen && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[32px] p-10 max-w-md w-full shadow-3xl animate-in zoom-in-95 duration-300">
+                        <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-red-500/10">
+                            <Trash2 size={40} />
+                        </div>
+                        <h3 className="text-2xl font-black text-slate-900 text-center mb-2 tracking-tight uppercase">Eradicate Blueprint?</h3>
+                        <p className="text-slate-500 text-center mb-8 font-medium">
+                            You are about to permanently purge <span className="text-slate-900 font-black italic">"{deleteConfig.exam?.title}"</span> and all its associated intelligence records. This operation is irreversible.
+                        </p>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Button 
+                                variant="outline" 
+                                className="h-14 rounded-2xl font-black text-slate-400 uppercase tracking-widest border-2"
+                                onClick={() => setDeleteConfig({ isOpen: false, exam: null })}
+                            >
+                                Abort
+                            </Button>
+                            <Button 
+                                variant="primary" 
+                                className="h-14 rounded-2xl bg-red-600 hover:bg-red-700 font-black uppercase tracking-widest shadow-xl shadow-red-600/20 border-none"
+                                onClick={() => handleDelete(deleteConfig.exam?.id)}
+                            >
+                                Confirm Purge
+                            </Button>
                         </div>
                     </div>
                 </div>

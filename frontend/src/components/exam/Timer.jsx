@@ -7,7 +7,9 @@ const Timer = ({ duration, onTimeUp }) => {
 
     useEffect(() => {
         if (timeLeft <= 0) {
-            onTimeUp();
+            if (typeof onTimeUp === 'function') {
+                onTimeUp();
+            }
             return;
         }
 
